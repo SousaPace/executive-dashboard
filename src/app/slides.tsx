@@ -1,6 +1,7 @@
 import type { FinanceDashboard } from "@/domain/dashboard";
 import type { MetricKey } from "@/domain/kpis";
-import { AgingBars, CccBreakdown, KpiCard, MixBar, Panel } from "@/ui/cards";
+import { CccBreakdown, KpiCard, MixBar, Panel } from "@/ui/cards";
+import { AgingColumns } from "@/ui/aging";
 import { TrendChart } from "@/ui/charts";
 import { formatValue } from "@/ui/format";
 
@@ -58,16 +59,16 @@ export function FinanceSlide({ d }: Props) {
           />
         </Panel>
         <Panel
-          title="Antigüedad de cuentas por cobrar"
-          subtitle={`AR Aging al corte · ${formatValue("usd", d.rows.arAging.day)}`}
+          title="AR por antigüedad"
+          subtitle={`Cuentas por cobrar por rango de días, USD · total ${formatValue("usd", d.rows.arAging.day)}`}
         >
-          <AgingBars buckets={d.arAging} sheet="AR Aging" />
+          <AgingColumns buckets={d.arAging} sheet="AR Aging" color={1} />
         </Panel>
         <Panel
-          title="Antigüedad de cuentas por pagar"
-          subtitle={`AP Aging al corte · ${formatValue("usd", d.rows.apAging.day)}`}
+          title="AP por antigüedad"
+          subtitle={`Cuentas por pagar por rango de días, USD · total ${formatValue("usd", d.rows.apAging.day)}`}
         >
-          <AgingBars buckets={d.apAging} sheet="AP Aging" />
+          <AgingColumns buckets={d.apAging} sheet="AP Aging" color={2} />
         </Panel>
       </div>
     </div>

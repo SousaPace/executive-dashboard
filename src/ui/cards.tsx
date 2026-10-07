@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { AgingBucket, MetricRow } from "@/domain/dashboard";
+import type { MetricRow } from "@/domain/dashboard";
 import { planStatus, type PlanStatus } from "@/domain/kpis";
 import { Sparkline } from "./charts";
 import { daysText, formatValue, pct, usd } from "./format";
@@ -224,7 +224,8 @@ export function MixBar({
   const known = parts.filter(
     (p): p is typeof p & { value: number } => p.value !== null,
   );
-  if (!known.length) return <Empty>Sin desglose RM / WIP / FG en el Excel.</Empty>;
+  if (!known.length)
+    return <Empty>Sin desglose RM / WIP / FG en el Excel.</Empty>;
   const missing = parts.filter((p) => p.value === null).map((p) => p.label);
   const total = known.reduce((a, p) => a + p.value, 0) || 1;
   return (
@@ -260,43 +261,7 @@ export function MixBar({
   );
 }
 
-/** Aging buckets as horizontal bars, value and share at the tip. */
-export function AgingBars({
-  buckets,
-  sheet,
-}: {
-  buckets: AgingBucket[] | null;
-  /** Excel sheet that feeds it, named in the empty state. */
-  sheet: string;
-}) {
-  if (!buckets) return <Empty>Sin datos en la hoja “{sheet}” del Excel.</Empty>;
-  const total = buckets.reduce((a, b) => a + b.value, 0) || 1;
-  const max = Math.max(...buckets.map((b) => b.value), 1);
-  return (
-    <ul className="flex flex-col justify-around gap-3">
-      {buckets.map((b) => (
-        <li
-          key={b.key}
-          className="grid grid-cols-[6.5rem_1fr_5rem_3.5rem] items-center gap-3"
-        >
-          <span className="font-semibold text-ink-2">{b.label}</span>
-          <span className="relative h-6 border-l border-line">
-            <span
-              className="absolute inset-y-0 left-0 rounded-r bg-series-1"
-              style={{ width: `${(b.value / max) * 100}%` }}
-            />
-          </span>
-          <span className="text-right font-bold">{usd(b.value)}</span>
-          <span className="text-right text-sm text-ink-2">
-            {pct((b.value / total) * 100)}
-          </span>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function Empty({ children }: { children: ReactNode }) {
+export function Empty({ children }: { children: ReactNode }) {
   return (
     <p className="grid flex-1 place-items-center rounded-lg border border-dashed border-line p-6 text-center text-ink-3">
       {children}

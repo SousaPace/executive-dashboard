@@ -356,3 +356,139 @@ export function Sparkline({ values }: { values: number[] }) {
     </div>
   );
 }
+
+/**
+ * One column per category (aging buckets): y-axis from $0, value label on top of each column,
+ * hover tooltip with amount and share of the total.
+ */
+export function CategoryColumns({
+  rows,
+  color,
+  label,
+}: {
+  rows: { key: string; label: string; value: number }[];
+  /** Categorical slot: AR = 1 (blue), AP = 2 (orange). */
+  color: 1 | 2 | 3;
+  label: string;
+}) {
+  const [ref, { width: W, height: H }] = useSize<HTMLDivElement>();
+  const [active, setActive] = useState<number | null>(null);
+  const fill = `var(--color-series-${color})`;
+  const M = { top: 28, right: 8, bottom: 28, left: 56 };
+  const PW = Math.max(W - M.left - M.right, 1);
+  const PH = Math.max(H - M.top - M.bottom, 1);
+  const n = rows.length;
+  const total = rows.reduce((a, r) => a + r.value, 0);
+  const { hi, ticks } = scale(
+    rows.map((r) => Math.max(r.value, 0)),
+    true,
+  );
+  const y = (v: number) => M.top + PH - (Math.max(v, 0) / (hi || 1)) * PH;
+  const band = PW / Math.max(n, 1);
+  const x = (i: number) => M.left + band * i + band / 2;
+  const barW = Math.min(band * 0.62, 72);
+  const base = M.top + PH;
+  const usd = (v: number) => formatValue("usd", v);
+  const share = (v: number) =>
+    total ? `${((v / total) * 100).toFixed(1)}%` : "—";
+
+  return (
+    <div className="relative min-h-48 w-full flex-1">
+      <div
+        ref={ref}
+        className="absolute inset-0"
+        role="img"
+        aria-label={`${label}: ${rows.map((r) => `${r.label} ${usd(r.value)}`).join(", ")}`}
+      >
+        {W > 0 && H > 0 && (
+          <svg width={W} height={H} onPointerLeave={() => setActive(null)}>
+            {ticks.map((t) => (
+              <g key={t}>
+                <line
+                  x1={M.left}
+                  x2={M.left + PW}
+                  y1={y(t)}
+                  y2={y(t)}
+                  stroke="var(--color-grid)"
+                  strokeWidth={1}
+                />
+                <text
+                  x={M.left - 10}
+                  y={y(t) + 4}
+                  textAnchor="end"
+                  fontSize={12}
+                  fill="var(--color-ink-3)"
+                >
+                  {usd(t)}
+                </text>
+              </g>
+            ))}
+            {rows.map((r, i) => (
+              <g
+                key={r.key}
+                opacity={active === null || active === i ? 1 : 0.55}
+              >
+                {r.value > 0 && (
+                  <path
+                    d={barPath(
+                      x(i) - barW / 2,
+                      y(r.value),
+                      barW,
+                      base - y(r.value),
+                    )}
+                    fill={fill}
+                  />
+                )}
+                <text
+                  x={x(i)}
+                  y={y(r.value) - 8}
+                  textAnchor="middle"
+                  fontSize={13}
+                  fontWeight={700}
+                  fill="var(--color-ink)"
+                >
+                  {usd(r.value)}
+                </text>
+                <text
+                  x={x(i)}
+                  y={H - 8}
+                  textAnchor="middle"
+                  fontSize={12}
+                  fill="var(--color-ink-2)"
+                >
+                  {r.label}
+                </text>
+                {/* Hit target: the whole band, bigger than the column. */}
+                <rect
+                  x={M.left + band * i}
+                  y={M.top}
+                  width={band}
+                  height={PH}
+                  fill="transparent"
+                  onPointerEnter={() => setActive(i)}
+                />
+              </g>
+            ))}
+          </svg>
+        )}
+        {active !== null && W > 0 && (
+          <div
+            className="pointer-events-none absolute z-10 rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm shadow-lg"
+            style={{
+              top: Math.max(y(rows[active].value) - 70, 4),
+              ...(x(active) > W * 0.6
+                ? { right: W - x(active) + barW / 2 + 8 }
+                : { left: x(active) + barW / 2 + 8 }),
+            }}
+          >
+            <div className="text-xs text-ink-3">{rows[active].label}</div>
+            <div className="font-bold text-ink">{usd(rows[active].value)}</div>
+            <div className="text-xs text-ink-2">
+              {share(rows[active].value)} del total
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
