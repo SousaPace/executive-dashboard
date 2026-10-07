@@ -91,6 +91,41 @@ export default async function Home() {
         ))}
       </nav>
 
+      {/* Plain <a>: a file download, not a page navigation. */}
+      <a
+        href="/plantilla"
+        download
+        className="group flex items-center gap-5 rounded-2xl border border-accent/40 bg-accent/10 p-6 transition-colors hover:border-accent hover:bg-accent/15"
+      >
+        <span className="grid size-16 shrink-0 place-items-center rounded-xl bg-accent text-bg">
+          <svg
+            width="32"
+            height="32"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M12 3v12M7 10l5 5 5-5M4 19h16" />
+          </svg>
+        </span>
+        <span className="flex flex-col gap-1">
+          <span className="text-2xl font-bold">
+            Descargar plantilla de Excel
+          </span>
+          <span className="text-ink-2">
+            El formato para la carga diaria: hojas Diario, Plan, AR Aging y AP
+            Aging
+          </span>
+        </span>
+        <span className="ml-auto hidden rounded-full border border-accent/50 px-4 py-1.5 text-sm font-semibold text-accent group-hover:bg-accent group-hover:text-bg sm:inline">
+          .xlsx
+        </span>
+      </a>
+
       <footer className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-ink-2">
         <span>
           {current
