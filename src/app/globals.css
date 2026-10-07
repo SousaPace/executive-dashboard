@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+/*
+ * Executive dark theme (wall screen / TV). Series colors validated on the panel surface with the
+ * dataviz palette validator (dark mode); status colors are reserved for plan status and always
+ * ship with an icon + label.
+ */
+@theme {
+  --font-sans:
+    var(--font-plex), ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial,
+    sans-serif;
+  --font-display:
+    var(--font-archivo), var(--font-plex), ui-sans-serif, system-ui, sans-serif;
+
+  --color-bg: #0b1220;
+  --color-panel: #131c2e;
+  --color-panel-2: #1b2742;
+  --color-line: #2a3a5c;
+  --color-grid: #223049;
+  --color-ink: #f1f5fb;
+  --color-ink-2: #a9b6cc;
+  --color-ink-3: #74829b;
+  --color-accent: #5aa2ff;
+
+  --color-series-1: #3d8bf0;
+  --color-series-2: #e2703a;
+  --color-series-3: #17a874;
+
+  --color-ok: #34c759;
+  --color-warn: #f5b928;
+  --color-bad: #f04848;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@keyframes tab-progress {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
