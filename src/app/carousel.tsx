@@ -15,19 +15,16 @@ import {
  */
 export function Carousel({
   views,
-  initial = 0,
   intervalMs = 20_000,
   children,
 }: {
   views: { title: string; subtitle: string }[];
-  /** View shown first (e.g. from ?vista=). */
-  initial?: number;
   intervalMs?: number;
   children: ReactNode;
 }) {
   const slides = Children.toArray(children);
   const count = slides.length;
-  const [active, setActive] = useState(initial);
+  const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const [hovering, setHovering] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -165,8 +162,9 @@ export function Carousel({
         </button>
       </div>
 
-      {/* py-1 widens the clip box so card borders at the top/bottom edge are not cut. */}
-      <div className="-my-1 min-h-0 flex-1 overflow-hidden py-1">
+      {/* The clip box is 4px wider on every side and each slide pads 4px back in, so card
+          borders at any edge are never cut and the neighbour slide never peeks in. */}
+      <div className="-m-1 min-h-0 flex-1 overflow-hidden">
         <div
           className="flex h-full transition-transform duration-500 ease-out motion-reduce:transition-none"
           style={{ transform: `translateX(-${active * 100}%)` }}
@@ -178,7 +176,7 @@ export function Carousel({
               role="tabpanel"
               aria-labelledby={`tab-${i}`}
               inert={i !== active}
-              className="h-full w-full shrink-0"
+              className="h-full w-full shrink-0 p-1"
             >
               {s}
             </div>

@@ -23,8 +23,15 @@ pnpm test
 pnpm typecheck
 ```
 
-- Rota cada 20 s; se pausa con el mouse encima, con foco de teclado o con el botón de pausa. ← / → cambian de vista.
-- `?vista=finanzas | inventario | ventas` abre una vista específica (útil para fijar una pantalla).
+Pantallas (una por televisión):
+
+| Ruta | Muestra |
+| --- | --- |
+| `/` | Inicio: elegir qué muestra esta pantalla |
+| `/todos` | Carrusel con las tres vistas; rota cada 20 s, se pausa con el mouse encima, con foco de teclado o con el botón de pausa; ← / → cambian de vista |
+| `/finanzas` | Solo Finanzas, fija |
+| `/inventario` | Solo Inventario, fija |
+| `/ventas` | Solo Ventas, fija |
 - En WSL con el repo en `/mnt/c`, el servidor de desarrollo no siempre detecta cambios: reiniciar `pnpm dev`.
 
 ## Carga diaria del Excel
@@ -72,6 +79,7 @@ Código: plantilla y lectura en `src/data/excel.ts`, cálculo de KPIs en `src/do
 - Denominador del DPO (compras o costo de ventas). Mientras tanto, el DPO se captura ya calculado en el Excel.
 - MTD de saldos: promedio del mes vs. cierre.
 - Umbrales En plan / Cerca / Fuera (hoy: lado favorable / ≤ 5 pts en contra / más) y dirección favorable de AP y Open PO's.
+- Inventory: arriba del plan cuenta como favorable (decisión de Finanzas, 7-oct-2026); DIO y CCC siguen "menor es mejor".
 - Si Metal Recon Billings cuenta dentro de Daily Sales.
 
 ## Fuentes de datos identificadas

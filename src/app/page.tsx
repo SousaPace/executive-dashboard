@@ -1,186 +1,109 @@
-import Image from "next/image";
-import { connection } from "next/server";
 import Link from "next/link";
-import { mockInput } from "@/data/mock";
+import { connection } from "next/server";
+import type { ReactNode } from "react";
 import { loadCurrent } from "@/data/store";
-import { buildDashboard } from "@/domain/dashboard";
-import { NEAR_PLAN_POINTS } from "@/domain/kpis";
-import { shortDate } from "@/ui/format";
-import { AutoRefresh } from "./auto-refresh";
-import { Carousel } from "./carousel";
-import { FinanceSlide, InventorySlide, SalesSlide } from "./slides";
+import { Logo, uploadedText, VIEWS } from "./dashboard-view";
 
-const TIME_ZONE = "America/Mexico_City";
+/** Start screen: pick what this TV shows — the rotating carousel or one fixed view. */
 
-/** "YYYY-MM-DD" in the given time zone. */
-function todayIn(timeZone: string): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
-}
-
-type Note = {
-  tag: "DATA GAP" | "REGLA PENDIENTE" | "CÁLCULO" | "AVISO";
-  title: string;
-  body: string;
-};
-
-const MOCK_NOTE: Note = {
-  tag: "DATA GAP",
-  title: "Sin Excel cargado",
-  body: "Todavía no se ha subido ningún archivo en /cargar: todos los valores son simulados.",
-};
-
-const NOTES: Note[] = [
-  {
-    tag: "CÁLCULO",
-    title: "Day · MTD · Plan",
-    body: "Collections y Daily Sales: Day = el día, MTD = suma del mes, Plan = plan acumulado a la fecha. Saldos y días (AR, AP, Inventory, Open PO's, DSO, DPO, DIO, CCC): Day = cierre del día, MTD = promedio de los días hábiles del mes. % vs Plan = MTD / Plan.",
-  },
-  {
-    tag: "CÁLCULO",
-    title: "Fórmulas",
-    body: "DSO = AR / venta diaria promedio. DIO = inventario total (RM+WIP+FG) / venta diaria promedio. CCC = DSO + DIO − DPO.",
-  },
-  {
-    tag: "REGLA PENDIENTE",
-    title: "En plan · Cerca · Fuera",
-    body: `En plan = del lado favorable del plan; Cerca = hasta ${NEAR_PLAN_POINTS} puntos desfavorables; Fuera = más. AP Aging y Open PO's (dirección sin definir): ±${NEAR_PLAN_POINTS} pts en plan, ±${2 * NEAR_PLAN_POINTS} cerca. Confirmar umbrales y dirección.`,
-  },
-  {
-    tag: "REGLA PENDIENTE",
-    title: "Venta diaria promedio",
-    body: "Falta definir la ventana (mes en curso, últimos 30/90 días). Hoy: promedio de la venta diaria de los días del Excel, como la columna Average del Daily Sales Report.",
-  },
-  {
-    tag: "REGLA PENDIENTE",
-    title: "Fórmula de DPO",
-    body: 'Falta definir el denominador (compras diarias promedio o costo de ventas). Por ahora el DPO se toma tal cual de la columna "DPO (días)" del Excel.',
-  },
-];
-
-const uploadedText = (iso: string) =>
-  new Intl.DateTimeFormat("es-MX", {
-    timeZone: TIME_ZONE,
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).format(new Date(iso));
-
-/** Official logo, light version for the dark theme (original: public/brand/orion-castings.png). */
-function Logo() {
-  return (
-    <Image
-      src="/brand/orion-castings-light.png"
-      alt="Orion Castings"
-      width={552}
-      height={122}
-      loading="eager"
-      className="h-auto w-56 shrink-0"
+const ICONS: Record<string, ReactNode> = {
+  todos: (
+    <path
+      d="M4 7h16M4 12h16M4 17h16M18 4l3 3-3 3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
     />
-  );
-}
+  ),
+  finanzas: (
+    <path
+      d="M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 2.6 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3"
+      strokeLinecap="round"
+    />
+  ),
+  inventario: (
+    <path
+      d="M3 8l9-5 9 5v8l-9 5-9-5V8zM3 8l9 5 9-5M12 13v8"
+      strokeLinejoin="round"
+    />
+  ),
+  ventas: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" strokeLinecap="round" />,
+};
 
-const VIEWS = [
+const OPTIONS = [
   {
-    slug: "finanzas",
-    title: "Finanzas",
-    subtitle: "Collections · AR · DSO · AP · DPO",
+    href: "/todos",
+    slug: "todos",
+    title: "Todos",
+    subtitle: "Carrusel: Finanzas → Inventario → Ventas, cambia cada 20 s",
   },
-  {
-    slug: "inventario",
-    title: "Inventario",
-    subtitle: "Inventory · DIO · CCC",
-  },
-  { slug: "ventas", title: "Ventas", subtitle: "Daily Sales · Open PO's" },
+  ...VIEWS.map((v) => ({
+    href: `/${v.slug}`,
+    slug: v.slug,
+    title: v.title,
+    subtitle: v.subtitle,
+  })),
 ];
 
-export default async function DashboardPage({ searchParams }: PageProps<"/">) {
-  const { vista } = await searchParams;
-  await connection(); // reads the latest upload (or today's mock) on every request
-  const stored = await loadCurrent();
-  const d = stored
-    ? buildDashboard(stored.input, {
-        kind: "excel",
-        fileName: stored.fileName,
-        uploadedAt: stored.uploadedAt,
-        warnings: stored.warnings,
-      })
-    : buildDashboard(mockInput(todayIn(TIME_ZONE)), { kind: "mock" });
-  const notes: Note[] = [
-    ...(stored
-      ? stored.warnings.map((w) => ({
-          tag: "AVISO" as const,
-          title: "Excel",
-          body: w,
-        }))
-      : [MOCK_NOTE]),
-    ...NOTES,
-  ];
+export default async function Home() {
+  await connection();
+  const current = await loadCurrent();
   return (
-    <main className="flex min-h-screen flex-col gap-4 px-8 py-5 xl:h-screen">
-      <header className="flex items-center gap-10">
+    <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center gap-10 px-8 py-10">
+      <header className="flex flex-col items-start gap-5">
         <Logo />
-        <div className="flex flex-col gap-2">
-          <h1 className="font-display text-[2.1rem] leading-none font-extrabold">
+        <div>
+          <h1 className="font-display text-4xl font-extrabold">
             Dashboard Ejecutivo · Capital de Trabajo
           </h1>
-          <div className="flex items-center gap-4 text-ink-2">
-            <span className="rounded-full border border-line px-3 py-0.5 text-xs font-bold tracking-wider text-ink uppercase">
-              {stored ? "Excel importado" : "Datos de ejemplo"}
-            </span>
-            <span>Corte: {d.asOf ? shortDate(d.asOf) : "sin datos"}</span>
-            {stored && (
-              <span className="text-sm text-ink-3">
-                Actualizado {uploadedText(stored.uploadedAt)}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="ml-auto flex items-center gap-2 self-start">
-          <Link
-            href="/cargar"
-            className="rounded-full border border-line px-3 py-1 text-sm font-semibold text-ink-2 hover:bg-panel"
-          >
-            Cargar Excel
-          </Link>
-          <details className="relative">
-            <summary className="cursor-pointer list-none rounded-full border border-line px-3 py-1 text-sm font-semibold text-ink-2 hover:bg-panel">
-              Notas ({notes.length})
-            </summary>
-            <ul className="absolute right-0 z-20 mt-2 flex w-[32rem] flex-col gap-3 rounded-xl border border-line bg-panel-2 p-4 text-sm shadow-2xl">
-              {notes.map((n) => (
-                <li key={`${n.tag}-${n.title}-${n.body}`}>
-                  <span
-                    className={`mr-2 rounded px-1.5 py-0.5 text-[10px] font-black ${
-                      n.tag === "DATA GAP" || n.tag === "AVISO"
-                        ? "bg-warn text-bg"
-                        : n.tag === "REGLA PENDIENTE"
-                          ? "bg-accent text-bg"
-                          : "bg-line text-ink"
-                    }`}
-                  >
-                    {n.tag}
-                  </span>
-                  <b>{n.title}.</b> <span className="text-ink-2">{n.body}</span>
-                </li>
-              ))}
-            </ul>
-          </details>
+          <p className="mt-2 text-lg text-ink-2">
+            ¿Qué quieres mostrar en esta pantalla?
+          </p>
         </div>
       </header>
-      <AutoRefresh version={stored?.uploadedAt ?? null} />
-      <Carousel
-        views={VIEWS}
-        initial={Math.max(
-          VIEWS.findIndex((v) => v.slug === vista),
-          0,
-        )}
-      >
-        <FinanceSlide d={d} />
-        <InventorySlide d={d} />
-        <SalesSlide d={d} />
-      </Carousel>
+
+      <nav className="grid gap-4 sm:grid-cols-2">
+        {OPTIONS.map((o) => (
+          <Link
+            key={o.slug}
+            href={o.href}
+            className="group flex items-center gap-5 rounded-2xl border border-line bg-panel p-6 transition-colors hover:border-accent hover:bg-panel-2"
+          >
+            <span className="grid size-16 shrink-0 place-items-center rounded-xl bg-panel-2 text-accent group-hover:bg-bg">
+              <svg
+                width="34"
+                height="34"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.8}
+                aria-hidden
+              >
+                {ICONS[o.slug]}
+              </svg>
+            </span>
+            <span className="flex flex-col gap-1">
+              <span className="text-2xl font-bold group-hover:text-accent">
+                {o.title}
+              </span>
+              <span className="text-ink-2">{o.subtitle}</span>
+            </span>
+          </Link>
+        ))}
+      </nav>
+
+      <footer className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-ink-2">
+        <span>
+          {current
+            ? `Último Excel: ${current.fileName} · ${uploadedText(current.uploadedAt)}`
+            : "Todavía no se ha cargado ningún Excel: se muestran datos de ejemplo."}
+        </span>
+        <Link
+          href="/cargar"
+          className="font-semibold text-accent hover:underline"
+        >
+          Cargar Excel
+        </Link>
+      </footer>
     </main>
   );
 }

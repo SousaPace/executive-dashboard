@@ -58,7 +58,8 @@ export const METRICS: Record<
     label: "Inventory",
     definition: "Total de inventario RM+WIP+FG en dólares",
     unit: "usd",
-    direction: "lower",
+    // Business decision (Finanzas, 2026-10-07): above plan is favorable.
+    direction: "higher",
   },
   dio: {
     label: "DIO",
