@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { MetricRow } from "@/data/mock";
+import type { AgingBucket, MetricRow } from "@/domain/dashboard";
 import { planStatus, type PlanStatus } from "@/domain/kpis";
 import { Sparkline } from "./charts";
 import { daysText, formatValue, pct, usd } from "./format";
@@ -83,6 +83,9 @@ export function KpiCard({
             <span className="text-lg font-semibold text-ink-2">días</span>
           )}
         </div>
+        {row.note && (
+          <p className="text-xs font-semibold text-warn">⚠ {row.note}</p>
+        )}
         <div className="mt-1">
           <Sparkline values={trend.filter((v): v is number => v !== null)} />
         </div>
@@ -133,10 +136,18 @@ export function CccBreakdown({
   dio,
   dpo,
 }: {
-  dso: number;
-  dio: number;
-  dpo: number;
+  dso: number | null;
+  dio: number | null;
+  dpo: number | null;
 }) {
+  if (dso === null || dio === null || dpo === null) {
+    const missing = [
+      dso === null && "DSO",
+      dio === null && "DIO",
+      dpo === null && "DPO",
+    ].filter(Boolean);
+    return <Empty>Sin datos: falta {missing.join(", ")} en el Excel.</Empty>;
+  }
   const ccc = dso + dio - dpo;
   const max = Math.max(dso + dio, ccc, 1);
   const pctOf = (v: number) => `${(Math.max(v, 0) / max) * 100}%`;
@@ -208,13 +219,18 @@ export function CccBreakdown({
 export function MixBar({
   parts,
 }: {
-  parts: { key: string; label: string; value: number; color: string }[];
+  parts: { key: string; label: string; value: number | null; color: string }[];
 }) {
-  const total = parts.reduce((a, p) => a + p.value, 0) || 1;
+  const known = parts.filter(
+    (p): p is typeof p & { value: number } => p.value !== null,
+  );
+  if (!known.length) return <Empty>Sin datos de inventario en el Excel.</Empty>;
+  const missing = parts.filter((p) => p.value === null).map((p) => p.label);
+  const total = known.reduce((a, p) => a + p.value, 0) || 1;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex h-10 gap-0.5 overflow-hidden rounded">
-        {parts.map((p) => (
+        {known.map((p) => (
           <div
             key={p.key}
             className={p.color}
@@ -224,7 +240,7 @@ export function MixBar({
         ))}
       </div>
       <ul className="flex flex-col gap-3">
-        {parts.map((p) => (
+        {known.map((p) => (
           <li key={p.key} className="flex items-center gap-3 text-lg">
             <span className={`size-3 rounded-sm ${p.color}`} />
             <span className="font-bold">{p.label}</span>
@@ -235,6 +251,11 @@ export function MixBar({
           </li>
         ))}
       </ul>
+      {missing.length > 0 && (
+        <p className="text-sm font-semibold text-warn">
+          ⚠ Sin dato de {missing.join(", ")}
+        </p>
+      )}
     </div>
   );
 }
@@ -242,9 +263,13 @@ export function MixBar({
 /** Aging buckets as horizontal bars, value and share at the tip. */
 export function AgingBars({
   buckets,
+  sheet,
 }: {
-  buckets: { key: string; label: string; value: number }[];
+  buckets: AgingBucket[] | null;
+  /** Excel sheet that feeds it, named in the empty state. */
+  sheet: string;
 }) {
+  if (!buckets) return <Empty>Sin datos en la hoja “{sheet}” del Excel.</Empty>;
   const total = buckets.reduce((a, b) => a + b.value, 0) || 1;
   const max = Math.max(...buckets.map((b) => b.value), 1);
   return (
@@ -268,5 +293,13 @@ export function AgingBars({
         </li>
       ))}
     </ul>
+  );
+}
+
+function Empty({ children }: { children: ReactNode }) {
+  return (
+    <p className="grid flex-1 place-items-center rounded-lg border border-dashed border-line p-6 text-center text-ink-3">
+      {children}
+    </p>
   );
 }

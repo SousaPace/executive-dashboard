@@ -45,7 +45,8 @@ export function TrendChart({
 }: {
   /** "YYYY-MM-DD" per point. */
   dates: string[];
-  values: number[];
+  /** null = no data that day: a gap, never a zero. */
+  values: (number | null)[];
   mode: "area" | "bars";
   unit: Unit;
   plan?: { label: string; value: number };
@@ -54,14 +55,16 @@ export function TrendChart({
   const [ref, { width: W, height: H }] = useSize<HTMLDivElement>();
   const [active, setActive] = useState<number | null>(null);
   const gradient = `g${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
-  const fmt = (n: number) => formatValue(unit, n);
+  const fmt = (n: number | null) => formatValue(unit, n);
 
   const M = { top: 34, right: 16, bottom: 30, left: 64 };
   const PW = Math.max(W - M.left - M.right, 1);
   const PH = Math.max(H - M.top - M.bottom, 1);
   const n = values.length;
+  const known = values.filter((v): v is number => v !== null);
+  const lastIdx = values.findLastIndex((v) => v !== null);
   const { lo, hi, ticks } = scale(
-    plan ? [...values, plan.value] : values,
+    plan ? [...known, plan.value] : known.length ? known : [0],
     mode === "bars",
   );
   const y = (v: number) => M.top + PH - ((v - lo) / (hi - lo || 1)) * PH;
@@ -72,7 +75,15 @@ export function TrendChart({
       : M.left + (n > 1 ? (PW * i) / (n - 1) : PW / 2);
   const xLabels = n ? [...new Set([0, Math.floor((n - 1) / 2), n - 1])] : [];
   const barW = Math.min(band * 0.7, 32);
-  const line = values.map((v, i) => `${x(i)},${y(v)}`).join(" ");
+  // Runs of consecutive days with data; a missing day breaks the line.
+  const runs: number[][] = [];
+  values.forEach((v, i) => {
+    if (v === null) return;
+    if (i > 0 && values[i - 1] !== null) runs[runs.length - 1].push(i);
+    else runs.push([i]);
+  });
+  const pts = (run: number[]) =>
+    run.map((i) => `${x(i)},${y(values[i]!)}`).join(" ");
   const base = M.top + PH;
 
   const pick = (clientX: number, rect: DOMRect) => {
@@ -90,7 +101,7 @@ export function TrendChart({
         className="absolute inset-0"
         tabIndex={0}
         role="img"
-        aria-label={`${label}. Último: ${n ? fmt(values[n - 1]) : "sin datos"}${plan ? `. ${plan.label} ${fmt(plan.value)}` : ""}`}
+        aria-label={`${label}. Último: ${lastIdx >= 0 ? fmt(values[lastIdx]) : "sin datos"}${plan ? `. ${plan.label} ${fmt(plan.value)}` : ""}`}
         onKeyDown={(e) => {
           // Arrow keys step through the points here instead of changing the carousel view.
           if (e.key === "ArrowRight") {
@@ -137,80 +148,88 @@ export function TrendChart({
               </linearGradient>
             </defs>
 
-            {ticks.map((t) => (
-              <g key={t}>
-                <line
-                  x1={M.left}
-                  x2={M.left + PW}
-                  y1={y(t)}
-                  y2={y(t)}
-                  stroke="var(--color-grid)"
-                  strokeWidth={1}
-                />
+            {lastIdx >= 0 &&
+              ticks.map((t) => (
+                <g key={t}>
+                  <line
+                    x1={M.left}
+                    x2={M.left + PW}
+                    y1={y(t)}
+                    y2={y(t)}
+                    stroke="var(--color-grid)"
+                    strokeWidth={1}
+                  />
+                  <text
+                    x={M.left - 10}
+                    y={y(t) + 4}
+                    textAnchor="end"
+                    fontSize={12}
+                    fill="var(--color-ink-3)"
+                  >
+                    {fmt(t)}
+                  </text>
+                </g>
+              ))}
+            {lastIdx >= 0 &&
+              xLabels.map((i) => (
                 <text
-                  x={M.left - 10}
-                  y={y(t) + 4}
-                  textAnchor="end"
+                  key={i}
+                  x={x(i)}
+                  y={H - 8}
+                  textAnchor={
+                    mode === "bars"
+                      ? "middle"
+                      : i === 0
+                        ? "start"
+                        : i === n - 1
+                          ? "end"
+                          : "middle"
+                  }
                   fontSize={12}
                   fill="var(--color-ink-3)"
                 >
-                  {fmt(t)}
+                  {shortDate(dates[i])}
                 </text>
-              </g>
-            ))}
-            {xLabels.map((i) => (
-              <text
-                key={i}
-                x={x(i)}
-                y={H - 8}
-                textAnchor={
-                  mode === "bars"
-                    ? "middle"
-                    : i === 0
-                      ? "start"
-                      : i === n - 1
-                        ? "end"
-                        : "middle"
-                }
-                fontSize={12}
-                fill="var(--color-ink-3)"
-              >
-                {shortDate(dates[i])}
-              </text>
-            ))}
-
-            {mode === "bars" &&
-              values.map((v, i) => (
-                <path
-                  key={dates[i]}
-                  d={barPath(
-                    x(i) - barW / 2,
-                    y(v),
-                    barW,
-                    Math.max(base - y(v), 0),
-                  )}
-                  fill={SERIES}
-                  opacity={active === null || active === i ? 1 : 0.55}
-                />
               ))}
 
-            {mode === "area" && n > 0 && (
+            {mode === "bars" &&
+              values.map((v, i) =>
+                v === null ? null : (
+                  <path
+                    key={dates[i]}
+                    d={barPath(
+                      x(i) - barW / 2,
+                      y(v),
+                      barW,
+                      Math.max(base - y(v), 0),
+                    )}
+                    fill={SERIES}
+                    opacity={active === null || active === i ? 1 : 0.55}
+                  />
+                ),
+              )}
+
+            {mode === "area" && lastIdx >= 0 && (
               <>
-                <polygon
-                  points={`${x(0)},${base} ${line} ${x(n - 1)},${base}`}
-                  fill={`url(#${gradient})`}
-                />
-                <polyline
-                  points={line}
-                  fill="none"
-                  stroke={SERIES}
-                  strokeWidth={2}
-                  strokeLinejoin="round"
-                  strokeLinecap="round"
-                />
+                {runs.map((run) => (
+                  <g key={run[0]}>
+                    <polygon
+                      points={`${x(run[0])},${base} ${pts(run)} ${x(run[run.length - 1])},${base}`}
+                      fill={`url(#${gradient})`}
+                    />
+                    <polyline
+                      points={pts(run)}
+                      fill="none"
+                      stroke={SERIES}
+                      strokeWidth={2}
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+                  </g>
+                ))}
                 <circle
-                  cx={x(n - 1)}
-                  cy={y(values[n - 1])}
+                  cx={x(lastIdx)}
+                  cy={y(values[lastIdx]!)}
                   r={4.5}
                   fill={SERIES}
                   stroke="var(--color-panel)"
@@ -231,7 +250,19 @@ export function TrendChart({
               />
             )}
 
-            {active !== null && mode === "area" && (
+            {lastIdx < 0 && (
+              <text
+                x={M.left + PW / 2}
+                y={M.top + PH / 2}
+                textAnchor="middle"
+                fontSize={14}
+                fill="var(--color-ink-3)"
+              >
+                Sin datos en el Excel
+              </text>
+            )}
+
+            {active !== null && mode === "area" && values[active] !== null && (
               <>
                 <line
                   x1={x(active)}
@@ -243,7 +274,7 @@ export function TrendChart({
                 />
                 <circle
                   cx={x(active)}
-                  cy={y(values[active])}
+                  cy={y(values[active]!)}
                   r={5}
                   fill={SERIES}
                   stroke="var(--color-panel)"
@@ -257,7 +288,7 @@ export function TrendChart({
           <div
             className="pointer-events-none absolute z-10 rounded-lg border border-line bg-panel-2 px-3 py-2 text-sm shadow-lg"
             style={{
-              top: Math.max(y(values[active]) - 64, 4),
+              top: Math.max(y(values[active] ?? hi) - 64, 4),
               ...(x(active) > W * 0.6
                 ? { right: W - x(active) + 12 }
                 : { left: x(active) + 12 }),

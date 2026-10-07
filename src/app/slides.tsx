@@ -1,8 +1,8 @@
-import type { FinanceDashboard } from "@/data/mock";
+import type { FinanceDashboard } from "@/domain/dashboard";
 import type { MetricKey } from "@/domain/kpis";
 import { AgingBars, CccBreakdown, KpiCard, MixBar, Panel } from "@/ui/cards";
 import { TrendChart } from "@/ui/charts";
-import { usd } from "@/ui/format";
+import { formatValue } from "@/ui/format";
 
 type Props = { d: FinanceDashboard };
 
@@ -31,9 +31,11 @@ function Cards({ d, keys, cols }: Props & { keys: MetricKey[]; cols: string }) {
 
 const slide = "flex h-full flex-col gap-4";
 const dates = (d: FinanceDashboard) => d.days.map((x) => x.key);
+/** No plan in the Excel → no dashed line (never a line at $0). */
+const planLine = (label: string, value: number | null) =>
+  value === null ? undefined : { label, value };
 
 export function FinanceSlide({ d }: Props) {
-  const dailyPlan = d.series.collectionsPlan[0] ?? 0;
   return (
     <div className={slide}>
       <Cards
@@ -51,21 +53,21 @@ export function FinanceSlide({ d }: Props) {
             values={d.series.collections}
             mode="bars"
             unit="usd"
-            plan={{ label: "Plan diario", value: dailyPlan }}
+            plan={planLine("Plan diario", d.dailyPlan.collections)}
             label="Cobranza diaria contra plan diario"
           />
         </Panel>
         <Panel
           title="Antigüedad de cuentas por cobrar"
-          subtitle={`AR Aging al corte · ${usd(d.rows.arAging.day ?? 0)}`}
+          subtitle={`AR Aging al corte · ${formatValue("usd", d.rows.arAging.day)}`}
         >
-          <AgingBars buckets={d.arAging} />
+          <AgingBars buckets={d.arAging} sheet="AR Aging" />
         </Panel>
         <Panel
           title="Antigüedad de cuentas por pagar"
-          subtitle={`AP Aging al corte · ${usd(d.rows.apAging.day ?? 0)}`}
+          subtitle={`AP Aging al corte · ${formatValue("usd", d.rows.apAging.day)}`}
         >
-          <AgingBars buckets={d.apAging} />
+          <AgingBars buckets={d.apAging} sheet="AP Aging" />
         </Panel>
       </div>
     </div>
@@ -92,7 +94,7 @@ export function InventorySlide({ d }: Props) {
             values={d.series.inventory}
             mode="area"
             unit="usd"
-            plan={{ label: "Plan", value: d.rows.inventory.plan ?? 0 }}
+            plan={planLine("Plan", d.rows.inventory.plan)}
             label="Inventario total diario"
           />
         </Panel>
@@ -100,11 +102,7 @@ export function InventorySlide({ d }: Props) {
           title="Ciclo de conversión de efectivo"
           subtitle="CCC = DSO + DIO − DPO, promedio MTD"
         >
-          <CccBreakdown
-            dso={dso.mtd ?? 0}
-            dio={dio.mtd ?? 0}
-            dpo={dpo.mtd ?? 0}
-          />
+          <CccBreakdown dso={dso.mtd} dio={dio.mtd} dpo={dpo.mtd} />
         </Panel>
         <Panel
           title="Mezcla de inventario"
@@ -115,19 +113,19 @@ export function InventorySlide({ d }: Props) {
               {
                 key: "rm",
                 label: "RM",
-                value: d.series.rm[i],
+                value: d.series.rm[i] ?? null,
                 color: "bg-series-1",
               },
               {
                 key: "wip",
                 label: "WIP",
-                value: d.series.wip[i],
+                value: d.series.wip[i] ?? null,
                 color: "bg-series-2",
               },
               {
                 key: "fg",
                 label: "FG",
-                value: d.series.fg[i],
+                value: d.series.fg[i] ?? null,
                 color: "bg-series-3",
               },
             ]}
@@ -156,7 +154,7 @@ export function SalesSlide({ d }: Props) {
             values={d.series.sales}
             mode="bars"
             unit="usd"
-            plan={{ label: "Plan diario", value: d.series.salesPlan[0] ?? 0 }}
+            plan={planLine("Plan diario", d.dailyPlan.sales)}
             label="Venta diaria contra plan diario"
           />
         </Panel>
@@ -169,7 +167,7 @@ export function SalesSlide({ d }: Props) {
             values={d.series.openPos}
             mode="area"
             unit="usd"
-            plan={{ label: "Plan", value: d.rows.openPos.plan ?? 0 }}
+            plan={planLine("Plan", d.rows.openPos.plan)}
             label="Valor diario de órdenes pendientes de surtir"
           />
         </Panel>
