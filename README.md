@@ -13,7 +13,32 @@ Cada KPI muestra MTD, Day, Plan y % vs Plan, con estado **En plan / Cerca del pl
 Los datos salen de un **Excel que se sube cada mañana** en `/cargar`. Mientras no se haya subido
 ninguno, el dashboard muestra datos simulados con la etiqueta "Datos de ejemplo".
 
-## Uso
+## Instalación en el servidor (Windows Server 2022)
+
+No necesita WSL. Requisitos: **Node.js 22 LTS** (instalador `.msi` x64 de nodejs.org) y **Git**.
+Los pasos se corren en **PowerShell como administrador**:
+
+```powershell
+git clone https://github.com/SousaPace/executive-dashboard.git C:\dashboard
+cd C:\dashboard
+powershell -ExecutionPolicy Bypass -File .\windows\instalar.ps1     # pnpm, dependencias, contraseña de carga, build
+powershell -ExecutionPolicy Bypass -File .\windows\servicio.ps1     # arranque automático + firewall (puerto 3100)
+```
+
+- `servicio.ps1` registra la tarea programada **"Dashboard Capital de Trabajo"**: corre como
+  SYSTEM al encender el servidor (sin sesión abierta), y si el proceso se cae lo vuelve a levantar
+  en 5 s. Abre el puerto en el firewall de Windows y al final imprime las direcciones para las
+  televisiones (`http://<ip-del-servidor>:3100/todos`, `/finanzas`, …).
+- Otro puerto: `servicio.ps1 -Port 8080`. Desinstalar: `servicio.ps1 -Quitar` (los datos en
+  `storage\` se conservan).
+- Actualizar a la última versión de GitHub: `windows\actualizar.ps1` (git pull, install, build y
+  reinicio).
+- Bitácora del servidor: `logs\servidor.log`. Excel cargados: `storage\`.
+- La contraseña de carga vive en `.env.local`; si se cambia, correr `servicio.ps1` para reiniciar.
+- Las fuentes vienen dentro del proyecto: compilar no requiere acceso a Google Fonts. Sí requiere
+  acceso al registro de npm para `pnpm install`.
+
+## Desarrollo
 
 ```bash
 pnpm install
@@ -32,7 +57,9 @@ Pantallas (una por televisión):
 | `/finanzas` | Solo Finanzas, fija |
 | `/inventario` | Solo Inventario, fija |
 | `/ventas` | Solo Ventas, fija |
-- En WSL con el repo en `/mnt/c`, el servidor de desarrollo no siempre detecta cambios: reiniciar `pnpm dev`.
+
+En WSL con el repo en `/mnt/c`, el servidor de desarrollo no siempre detecta cambios: correr con
+`NEXT_WATCH_POLL_MS=1000 pnpm dev` o reiniciarlo.
 
 ## Carga diaria del Excel
 

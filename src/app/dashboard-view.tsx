@@ -35,6 +35,8 @@ export function Logo() {
       width={552}
       height={122}
       loading="eager"
+      // Served as-is: no image optimizer (sharp) needed on the Windows server.
+      unoptimized
       className="h-auto w-56 shrink-0"
     />
   );

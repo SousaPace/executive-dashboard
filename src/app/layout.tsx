@@ -1,15 +1,23 @@
 import type { Metadata } from "next";
-import { Archivo, IBM_Plex_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-const plex = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+// Fonts ship with the project (SIL OFL, see fonts/OFL-*.txt): building on the plant server must
+// not depend on reaching Google Fonts.
+const plex = localFont({
+  src: [
+    { path: "./fonts/ibm-plex-sans-400.woff2", weight: "400" },
+    { path: "./fonts/ibm-plex-sans-500.woff2", weight: "500" },
+    { path: "./fonts/ibm-plex-sans-600.woff2", weight: "600" },
+    { path: "./fonts/ibm-plex-sans-700.woff2", weight: "700" },
+  ],
   variable: "--font-plex",
 });
-const archivo = Archivo({
-  subsets: ["latin"],
-  weight: ["800", "900"],
+const archivo = localFont({
+  src: [
+    { path: "./fonts/archivo-800.woff2", weight: "800" },
+    { path: "./fonts/archivo-900.woff2", weight: "900" },
+  ],
   variable: "--font-archivo",
 });
 

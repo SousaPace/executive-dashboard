@@ -15,12 +15,27 @@ export type StoredData = {
   input: DashboardInput;
 };
 
+/** Windows refuses to replace a file another request has open for a moment: retry briefly. */
+async function withRetry<T>(op: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await op();
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (attempt >= 9 || !["EPERM", "EBUSY", "EACCES"].includes(code ?? "")) throw e;
+      await new Promise((r) => setTimeout(r, 50 * (attempt + 1)));
+    }
+  }
+}
+
 const dir = () => process.env.DATA_DIR ?? path.join(process.cwd(), "storage");
 const currentFile = () => path.join(dir(), "current.json");
 
 export async function loadCurrent(): Promise<StoredData | null> {
   try {
-    return JSON.parse(await readFile(currentFile(), "utf8")) as StoredData;
+    return JSON.parse(
+      await withRetry(() => readFile(currentFile(), "utf8")),
+    ) as StoredData;
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw e;
@@ -39,5 +54,5 @@ export async function saveUpload(
   // Write-then-rename: a reader never sees a half-written current.json.
   const tmp = `${currentFile()}.tmp`;
   await writeFile(tmp, JSON.stringify(data));
-  await rename(tmp, currentFile());
+  await withRetry(() => rename(tmp, currentFile()));
 }
