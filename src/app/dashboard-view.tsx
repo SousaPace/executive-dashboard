@@ -4,7 +4,6 @@ import Link from "next/link";
 import { mockInput } from "@/data/mock";
 import { loadCurrent } from "@/data/store";
 import { buildDashboard } from "@/domain/dashboard";
-import { NEAR_PLAN_POINTS } from "@/domain/kpis";
 import { shortDate } from "@/ui/format";
 import { AutoRefresh } from "./auto-refresh";
 import { Carousel } from "./carousel";
@@ -16,46 +15,6 @@ const TIME_ZONE = "America/Mexico_City";
 function todayIn(timeZone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone }).format(new Date());
 }
-
-type Note = {
-  tag: "DATA GAP" | "REGLA PENDIENTE" | "CÁLCULO" | "AVISO";
-  title: string;
-  body: string;
-};
-
-const MOCK_NOTE: Note = {
-  tag: "DATA GAP",
-  title: "Sin Excel cargado",
-  body: "Todavía no se ha subido ningún archivo en /cargar: todos los valores son simulados.",
-};
-
-const NOTES: Note[] = [
-  {
-    tag: "CÁLCULO",
-    title: "Day · MTD · Plan",
-    body: "Collections y Daily Sales: Day = el día, MTD = suma del mes, Plan = plan acumulado a la fecha. Saldos y días (AR, AP, Inventory, Open PO's, DSO, DPO, DIO, CCC): Day = cierre del día, MTD = promedio de los días hábiles del mes. % vs Plan = MTD / Plan.",
-  },
-  {
-    tag: "CÁLCULO",
-    title: "Fórmulas",
-    body: "DSO = AR / venta diaria promedio. DIO = inventario total (RM+WIP+FG) / venta diaria promedio. CCC = DSO + DIO − DPO.",
-  },
-  {
-    tag: "REGLA PENDIENTE",
-    title: "En plan · Cerca · Fuera",
-    body: `En plan = del lado favorable del plan; Cerca = hasta ${NEAR_PLAN_POINTS} puntos desfavorables; Fuera = más. AP Aging y Open PO's (dirección sin definir): ±${NEAR_PLAN_POINTS} pts en plan, ±${2 * NEAR_PLAN_POINTS} cerca. Confirmar umbrales y dirección.`,
-  },
-  {
-    tag: "REGLA PENDIENTE",
-    title: "Venta diaria promedio",
-    body: "Falta definir la ventana (mes en curso, últimos 30/90 días). Hoy: promedio de la venta diaria de los días del Excel, como la columna Average del Daily Sales Report.",
-  },
-  {
-    tag: "REGLA PENDIENTE",
-    title: "Fórmula de DPO",
-    body: 'Falta definir el denominador (compras diarias promedio o costo de ventas). Por ahora el DPO se toma tal cual de la columna "DPO (días)" del Excel.',
-  },
-];
 
 export const uploadedText = (iso: string) =>
   new Intl.DateTimeFormat("es-MX", {
@@ -120,16 +79,6 @@ export async function DashboardView({ view }: { view: "todos" | ViewSlug }) {
       })
     : buildDashboard(mockInput(todayIn(TIME_ZONE)), { kind: "mock" });
   const single = VIEWS.find((v) => v.slug === view);
-  const notes: Note[] = [
-    ...(stored
-      ? stored.warnings.map((w) => ({
-          tag: "AVISO" as const,
-          title: "Excel",
-          body: w,
-        }))
-      : [MOCK_NOTE]),
-    ...NOTES,
-  ];
   return (
     <main className="flex min-h-screen flex-col gap-4 px-8 py-5 xl:h-screen">
       <header className="flex items-center gap-10">
@@ -152,37 +101,12 @@ export async function DashboardView({ view }: { view: "todos" | ViewSlug }) {
             )}
           </div>
         </div>
-        <div className="ml-auto flex items-center gap-2 self-start">
-          <Link
-            href="/cargar"
-            className="rounded-full border border-line px-3 py-1 text-sm font-semibold text-ink-2 hover:bg-panel"
-          >
-            Cargar Excel
-          </Link>
-          <details className="relative">
-            <summary className="cursor-pointer list-none rounded-full border border-line px-3 py-1 text-sm font-semibold text-ink-2 hover:bg-panel">
-              Notas ({notes.length})
-            </summary>
-            <ul className="absolute right-0 z-20 mt-2 flex w-[32rem] flex-col gap-3 rounded-xl border border-line bg-panel-2 p-4 text-sm shadow-2xl">
-              {notes.map((n) => (
-                <li key={`${n.tag}-${n.title}-${n.body}`}>
-                  <span
-                    className={`mr-2 rounded px-1.5 py-0.5 text-[10px] font-black ${
-                      n.tag === "DATA GAP" || n.tag === "AVISO"
-                        ? "bg-warn text-bg"
-                        : n.tag === "REGLA PENDIENTE"
-                          ? "bg-accent text-bg"
-                          : "bg-line text-ink"
-                    }`}
-                  >
-                    {n.tag}
-                  </span>
-                  <b>{n.title}.</b> <span className="text-ink-2">{n.body}</span>
-                </li>
-              ))}
-            </ul>
-          </details>
-        </div>
+        <Link
+          href="/cargar"
+          className="ml-auto self-start rounded-full border border-line px-3 py-1 text-sm font-semibold text-ink-2 hover:bg-panel"
+        >
+          Cargar Excel
+        </Link>
       </header>
       <AutoRefresh version={stored?.uploadedAt ?? null} />
       {single ? (
