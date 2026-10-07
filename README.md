@@ -38,6 +38,11 @@ pnpm typecheck
    - **AR Aging / AP Aging**: saldo por rango de antigüedad al día de corte.
 3. Subirlo en `/cargar` con la contraseña (`UPLOAD_PASSWORD`).
 
+También se acepta, como respaldo, una hoja con los KPIs en filas (Collections, AR Aging, …) y una
+columna por día con la fecha como encabezado, más una columna "Plan". En ese formato MTD y % vs Plan
+se ignoran y DSO / DIO / CCC se recalculan con su fórmula. Si en "Diario" no hay desglose de
+inventario, la columna "Inventario total" se usa tal cual.
+
 Reglas:
 
 - Celda vacía = **sin dato**, nunca 0. El KPI se muestra "—" y la gráfica deja el hueco.

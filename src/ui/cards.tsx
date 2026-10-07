@@ -224,7 +224,7 @@ export function MixBar({
   const known = parts.filter(
     (p): p is typeof p & { value: number } => p.value !== null,
   );
-  if (!known.length) return <Empty>Sin datos de inventario en el Excel.</Empty>;
+  if (!known.length) return <Empty>Sin desglose RM / WIP / FG en el Excel.</Empty>;
   const missing = parts.filter((p) => p.value === null).map((p) => p.label);
   const total = known.reduce((a, p) => a + p.value, 0) || 1;
   return (

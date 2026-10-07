@@ -25,6 +25,8 @@ export type DayInput = {
   rm: number | null;
   wip: number | null;
   fg: number | null;
+  /** Total as reported when there is no RM / WIP / FG split; wins over the parts. */
+  inventory: number | null;
   sales: number | null;
   openPos: number | null;
 };
@@ -137,10 +139,13 @@ export function buildDashboard(
   const fg = col("fg");
   const openPos = col("openPos");
 
-  // RM + WIP + FG with the parts that exist; the card says which part is missing.
-  const inventory = days.map((_, i) => sum([rm[i], wip[i], fg[i]]));
+  // The reported total if there is one; otherwise RM + WIP + FG with the parts that exist, and
+  // the card says which part is missing.
+  const reported = col("inventory");
+  const inventory = days.map((_, i) => reported[i] ?? sum([rm[i], wip[i], fg[i]]));
   const lastDay = last(days);
-  const missingParts = lastDay
+  const missingParts =
+    lastDay && lastDay.inventory === null
     ? (["rm", "wip", "fg"] as const)
         .filter((p) => lastDay[p] === null)
         .map((p) => p.toUpperCase())

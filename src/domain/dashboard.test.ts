@@ -24,6 +24,7 @@ const day = (date: string, v: Partial<DayInput>): DayInput => ({
   rm: null,
   wip: null,
   fg: null,
+  inventory: null,
   sales: null,
   openPos: null,
   ...v,

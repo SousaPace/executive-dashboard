@@ -57,6 +57,7 @@ describe("parseWorkbook", () => {
         rm: null,
         wip: 1445072.53,
         fg: 2580285.95,
+        inventory: null,
         sales: 203450.34,
         openPos: null,
       },
@@ -69,6 +70,7 @@ describe("parseWorkbook", () => {
         rm: null,
         wip: 1537941.21,
         fg: 2463159.95,
+        inventory: null,
         sales: 108042.68,
         openPos: null,
       },
@@ -115,7 +117,7 @@ describe("parseWorkbook", () => {
   it("explains a missing Diario sheet", async () => {
     const data = await workbook((wb) => wb.addWorksheet("Hoja1"));
     const { errors } = await parseWorkbook(data);
-    expect(errors[0]).toContain('Falta la hoja "Diario"');
+    expect(errors[0]).toContain('la hoja "Diario" de la plantilla');
   });
 
   it("rejects something that is not an Excel file", async () => {
@@ -123,5 +125,155 @@ describe("parseWorkbook", () => {
       new TextEncoder().encode("hola").buffer as ArrayBuffer,
     );
     expect(errors[0]).toContain("No pude abrir el archivo");
+  });
+});
+
+/** Replica of the finance team's sheet: KPIs in rows, one column per day, then MTD/%/Plan. */
+async function financeSheet(shifted: boolean): Promise<ArrayBuffer> {
+  const d = (m: number, day: number) => new Date(Date.UTC(2026, m - 1, day));
+  const dates = [d(9, 28), d(9, 29), d(9, 30), d(10, 1), d(10, 2), d(10, 5)];
+  return workbook((wb) => {
+    const ws = wb.addWorksheet("Hoja1");
+    // As sent: the first date sits above the KPI names, so every date is one column to the left.
+    ws.addRow(
+      shifted
+        ? [...dates, "MTD", "% Vs Plan", "Plan", "Definicion"]
+        : [null, ...dates, "MTD", "% Vs Plan", "Plan", "Definicion"],
+    );
+    const err = { error: "#VALUE!" };
+    ws.addRow([
+      "Collections",
+      252372.93,
+      100097.84,
+      0,
+      366210.47,
+      105300.96,
+      59593.16,
+      null,
+      err,
+      null,
+      "Dinero ingresado por cobranza",
+    ]);
+    ws.addRow([
+      "AR Aging",
+      5030576.28,
+      5030576.28,
+      5030576.28,
+      5030576.28,
+      5030576.28,
+      5030576.28,
+      null,
+      err,
+    ]);
+    ws.addRow([
+      "DSO",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      { error: "#DIV/0!" },
+    ]);
+    ws.addRow([
+      "AP Aging",
+      5472276.5,
+      5472276.5,
+      5632440.5,
+      5467466.54,
+      5632440.5,
+      5449606.32,
+      null,
+      err,
+    ]);
+    ws.addRow(["DPO"]);
+    ws.addRow([
+      "Inventory",
+      4025358.48,
+      4001101.16,
+      4095639.05,
+      4065597.68,
+      4288411.7,
+      4288411.7,
+      null,
+      0.9973,
+      4300000,
+    ]);
+    ws.addRow(["DIO", 20, 37, 69, 23, 43, 43, null, 1, 43]);
+    ws.addRow(["CCC"]);
+    ws.addRow([]);
+    ws.addRow([
+      "Daily Sales",
+      203450.34,
+      108042.68,
+      59539.98,
+      175042.45,
+      98920.94,
+      230128.02,
+      null,
+      0.07,
+      3500000,
+    ]);
+    ws.addRow([
+      "Open PO´s",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      747000,
+    ]);
+  });
+}
+
+describe("parseWorkbook — KPIs in rows, dates in columns", () => {
+  it("rejects dates shifted one column to the left, saying where", async () => {
+    const { input, errors } = await parseWorkbook(await financeSheet(true));
+    expect(input).toBeNull();
+    expect(errors[0]).toContain("celda A1");
+    expect(errors[0]).toContain("recorridas una columna a la izquierda");
+  });
+
+  it("reads the corrected sheet: days, plan column, recomputes DIO, ignores MTD and % vs Plan", async () => {
+    const { input, errors, warnings } = await parseWorkbook(
+      await financeSheet(false),
+    );
+    expect(errors).toEqual([]);
+    expect(input!.days.map((x) => x.date)).toEqual([
+      "2026-09-28",
+      "2026-09-29",
+      "2026-09-30",
+      "2026-10-01",
+      "2026-10-02",
+      "2026-10-05",
+    ]);
+    expect(input!.days[0]).toMatchObject({
+      collections: 252372.93,
+      inventory: 4025358.48,
+      sales: 203450.34,
+      dpo: null,
+      openPos: null,
+    });
+    expect(input!.days[2].collections).toBe(0); // "$ -" in accounting format is a real 0
+    expect(input!.plan).toMatchObject({
+      inventory: 4300000,
+      dio: 43,
+      salesMonth: 3500000,
+      openPos: 747000,
+      salesDays: null,
+    });
+    expect(
+      warnings.some(
+        (w) =>
+          w.includes("DIO se recalcula") || w.includes("DIO se recalculan"),
+      ),
+    ).toBe(true);
+    expect(warnings.some((w) => w.includes("Días de venta del mes"))).toBe(
+      true,
+    );
   });
 });

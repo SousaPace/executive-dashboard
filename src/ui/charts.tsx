@@ -238,7 +238,7 @@ export function TrendChart({
               </>
             )}
 
-            {plan && (
+            {plan && lastIdx >= 0 && (
               <line
                 x1={M.left}
                 x2={M.left + PW}

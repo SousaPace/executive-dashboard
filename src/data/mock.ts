@@ -73,6 +73,7 @@ export function mockInput(today: string): DashboardInput {
       rm: round(rmBal),
       wip: round(wipBal),
       fg: round(fgBal),
+      inventory: null,
       openPos: round(poBal),
     };
   });

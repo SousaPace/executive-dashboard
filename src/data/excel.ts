@@ -90,6 +90,12 @@ export const DAILY_COLUMNS: {
     aliases: ["openpos", "openpo", "ordenesabiertas", "ordenespendientes"],
     hint: "Valor de órdenes pendientes de surtir al cierre del día (USD)",
   },
+  {
+    field: "inventory",
+    header: "Inventario total",
+    aliases: ["inventariototal", "inventory", "inventario"],
+    hint: "Solo si no tienes el desglose RM / WIP / FG (USD); si lo llenas, manda sobre el desglose",
+  },
 ];
 
 export const PLAN_ROWS: {
@@ -236,7 +242,15 @@ function readDaily(
     );
     return [];
   }
+  const INVENTORY: string[] = ["rm", "wip", "fg", "inventory"];
+  const anyInventory = INVENTORY.some((f) => colOf.has(f));
   for (const c of DAILY_COLUMNS) {
+    // Inventory: either the total or the split is enough.
+    if (
+      INVENTORY.includes(c.field) &&
+      (anyInventory ? true : c.field !== "inventory")
+    )
+      continue;
     if (!colOf.has(c.field))
       warnings.push(
         `Hoja "${ws.name}": falta la columna "${c.header}"; ese dato se mostrará sin datos.`,
@@ -278,7 +292,7 @@ function readDaily(
     }
     seen.set(date, r);
 
-    const day = { date } as DayInput;
+    const day = emptyDay(date);
     for (const [c, v] of values) {
       const n = toNumber(v);
       if (n === "invalid") {
@@ -303,6 +317,238 @@ function readDaily(
       );
   }
   return days;
+}
+
+const emptyDay = (date: string): DayInput => ({
+  date,
+  collections: null,
+  ar: null,
+  ap: null,
+  dpo: null,
+  rm: null,
+  wip: null,
+  fg: null,
+  inventory: null,
+  sales: null,
+  openPos: null,
+});
+
+const colLetter = (c: number): string =>
+  (c > 26 ? colLetter(Math.floor((c - 1) / 26)) : "") +
+  String.fromCharCode(65 + ((c - 1) % 26));
+
+/**
+ * The finance team's own layout: KPIs in rows (Collections, AR Aging, …), one column per day
+ * with the date as header, then MTD / % Vs Plan / Plan / Definición. MTD and % vs Plan are
+ * ignored (the dashboard computes them); DSO, DIO and CCC are recomputed with their formula.
+ */
+const WIDE_ROWS: {
+  label: string;
+  aliases: string[];
+  day?: DayField;
+  plan?: keyof PlanInput;
+}[] = [
+  {
+    label: "Collections",
+    aliases: ["collections", "cobranza"],
+    day: "collections",
+    plan: "collectionsMonth",
+  },
+  {
+    label: "AR Aging",
+    aliases: ["araging", "ar", "cxc", "cuentasporcobrar"],
+    day: "ar",
+    plan: "arAging",
+  },
+  { label: "DSO", aliases: ["dso"], plan: "dso" },
+  {
+    label: "AP Aging",
+    aliases: ["apaging", "ap", "cxp", "cuentasporpagar"],
+    day: "ap",
+    plan: "apAging",
+  },
+  { label: "DPO", aliases: ["dpo"], day: "dpo", plan: "dpo" },
+  {
+    label: "Inventory",
+    aliases: ["inventory", "inventario", "inventariototal"],
+    day: "inventory",
+    plan: "inventory",
+  },
+  {
+    label: "Inventory RM",
+    aliases: ["inventoryrm", "inventariorm", "rm"],
+    day: "rm",
+  },
+  {
+    label: "Inventory WIP",
+    aliases: ["inventorywip", "inventariowip", "wip"],
+    day: "wip",
+  },
+  {
+    label: "Inventory FG",
+    aliases: ["inventoryfg", "inventariofg", "fg"],
+    day: "fg",
+  },
+  { label: "DIO", aliases: ["dio"], plan: "dio" },
+  { label: "CCC", aliases: ["ccc"], plan: "ccc" },
+  {
+    label: "Daily Sales",
+    aliases: ["dailysales", "ventadiaria", "venta", "ventas"],
+    day: "sales",
+    plan: "salesMonth",
+  },
+  {
+    label: "Open PO's",
+    aliases: ["openpos", "openpo", "ordenesabiertas"],
+    day: "openPos",
+    plan: "openPos",
+  },
+  {
+    label: "Días de venta",
+    aliases: ["diasdeventa", "diasdeventadelmes", "salesdays"],
+    plan: "salesDays",
+  },
+];
+const REQUIRED_WIDE = [
+  "Collections",
+  "AR Aging",
+  "AP Aging",
+  "DPO",
+  "Inventory",
+  "Daily Sales",
+  "Open PO's",
+];
+
+/** Label column + KPI rows, if this sheet uses the wide layout. */
+function wideLayout(ws: ExcelJS.Worksheet) {
+  for (let c = 1; c <= 5; c++) {
+    const rows = new Map<number, (typeof WIDE_ROWS)[number]>();
+    for (let r = 1; r <= Math.min(80, ws.rowCount); r++) {
+      const k = WIDE_ROWS.find((w) =>
+        w.aliases.includes(
+          norm(String(plain(ws.getRow(r).getCell(c).value) ?? "")),
+        ),
+      );
+      if (k && ![...rows.values()].includes(k)) rows.set(r, k);
+    }
+    if (rows.size >= 3) return { labelCol: c, rows };
+  }
+  return null;
+}
+
+function readWide(
+  ws: ExcelJS.Worksheet,
+  layout: NonNullable<ReturnType<typeof wideLayout>>,
+  errors: string[],
+  warnings: string[],
+): { days: DayInput[]; plan: PlanInput } {
+  const plan = Object.fromEntries(
+    PLAN_ROWS.map((p) => [p.field, null]),
+  ) as PlanInput;
+  const { labelCol, rows } = layout;
+  const firstKpiRow = Math.min(...rows.keys());
+
+  // Header = closest row above the KPIs that has dates.
+  let headerRow = 0;
+  for (let r = firstKpiRow - 1; r >= 1 && !headerRow; r--) {
+    ws.getRow(r).eachCell((cell) => {
+      const d = toDate(plain(cell.value));
+      if (d && d !== "invalid") headerRow = r;
+    });
+  }
+  if (!headerRow) {
+    errors.push(
+      `Hoja "${ws.name}": no encontré la fila de fechas arriba de los KPIs.`,
+    );
+    return { days: [], plan };
+  }
+
+  const dateCols = new Map<number, string>();
+  let planCol = 0;
+  const seen = new Map<string, number>();
+  ws.getRow(headerRow).eachCell((cell, c) => {
+    const v = plain(cell.value);
+    if (norm(String(v ?? "")) === "plan") planCol = c;
+    const d = toDate(v);
+    if (!d || d === "invalid") return;
+    if (c === labelCol) {
+      errors.push(
+        `Hoja "${ws.name}", celda ${colLetter(c)}${headerRow}: la fecha ${d} está arriba de los nombres de los KPIs, no de sus datos. Parece que las fechas están recorridas una columna a la izquierda: cada fecha debe quedar justo arriba de la columna con los datos de ese día.`,
+      );
+      return;
+    }
+    if (seen.has(d)) {
+      errors.push(
+        `Hoja "${ws.name}": la fecha ${d} aparece en las columnas ${colLetter(seen.get(d)!)} y ${colLetter(c)}.`,
+      );
+      return;
+    }
+    seen.set(d, c);
+    dateCols.set(c, d);
+  });
+  if (!dateCols.size)
+    errors.push(
+      `Hoja "${ws.name}": no encontré columnas con fecha en la fila ${headerRow}.`,
+    );
+
+  const days = new Map([...dateCols.values()].map((d) => [d, emptyDay(d)]));
+  const recomputed: string[] = [];
+  for (const [r, kpi] of rows) {
+    const row = ws.getRow(r);
+    for (const [c, date] of dateCols) {
+      const v = plain(row.getCell(c).value);
+      if (!kpi.day) {
+        if (!isBlank(v) && !recomputed.includes(kpi.label))
+          recomputed.push(kpi.label);
+        continue;
+      }
+      const n = toNumber(v);
+      if (n === "invalid")
+        errors.push(
+          `Hoja "${ws.name}", celda ${colLetter(c)}${r} (${kpi.label} del ${date}): ${show(v)} no es un número.`,
+        );
+      else days.get(date)![kpi.day] = n;
+    }
+    if (planCol && kpi.plan) {
+      const v = plain(row.getCell(planCol).value);
+      const n = toNumber(v);
+      if (n === "invalid")
+        errors.push(
+          `Hoja "${ws.name}", celda ${colLetter(planCol)}${r} (Plan de ${kpi.label}): ${show(v)} no es un número.`,
+        );
+      else plan[kpi.plan] = n;
+    }
+  }
+
+  const found = [...rows.values()].map((k) => k.label);
+  const missing = REQUIRED_WIDE.filter((l) => !found.includes(l));
+  if (missing.length)
+    warnings.push(
+      `Hoja "${ws.name}": no encontré las filas ${missing.join(", ")}; se mostrarán sin datos.`,
+    );
+  if (!planCol)
+    warnings.push(
+      `Hoja "${ws.name}": no encontré la columna "Plan"; ningún KPI tendrá plan.`,
+    );
+  if (recomputed.length)
+    warnings.push(
+      `Hoja "${ws.name}": ${recomputed.join(", ")} ${recomputed.length > 1 ? "se recalculan" : "se recalcula"} con su fórmula (DSO = AR ÷ venta diaria promedio, DIO = inventario ÷ venta diaria promedio, CCC = DSO + DIO − DPO); los valores escritos en el Excel no se usan.`,
+    );
+  return {
+    days: [...days.values()].sort((a, b) => a.date.localeCompare(b.date)),
+    plan,
+  };
+}
+
+/** Month plans for flows need the number of sales days to become a plan-to-date. */
+function checkSalesDays(plan: PlanInput, warnings: string[]) {
+  if (
+    plan.salesDays === null &&
+    (plan.salesMonth !== null || plan.collectionsMonth !== null)
+  )
+    warnings.push(
+      'Falta "Días de venta del mes": el plan de Collections y Daily Sales es del mes completo y no se puede comparar contra lo acumulado a la fecha. Agrega el número de días hábiles del mes fiscal (por ejemplo 20).',
+    );
 }
 
 function readPlan(
@@ -389,18 +635,37 @@ export async function parseWorkbook(data: ArrayBuffer): Promise<ParseResult> {
     };
   }
   const daily = findSheet(wb, SHEETS.daily);
-  if (!daily) {
+  const wide = daily
+    ? null
+    : wb.worksheets
+        .map((ws) => ({ ws, layout: wideLayout(ws) }))
+        .find((x) => x.layout !== null);
+  if (!daily && !wide) {
     const names = wb.worksheets.map((w) => `"${w.name}"`).join(", ");
     return {
       input: null,
       errors: [
-        `Falta la hoja "${SHEETS.daily}". Hojas encontradas: ${names}. Descarga la plantilla.`,
+        `No encontré los datos: el archivo debe tener la hoja "${SHEETS.daily}" de la plantilla, o una hoja con los KPIs en filas (Collections, AR Aging, …) y las fechas en columnas. Hojas encontradas: ${names}.`,
       ],
       warnings,
     };
   }
-  const days = readDaily(daily, errors, warnings);
-  const plan = readPlan(findSheet(wb, SHEETS.plan), errors, warnings);
+  let days: DayInput[];
+  let plan: PlanInput;
+  if (daily) {
+    days = readDaily(daily, errors, warnings);
+    plan = readPlan(findSheet(wb, SHEETS.plan), errors, warnings);
+  } else {
+    ({ days, plan } = readWide(wide!.ws, wide!.layout!, errors, warnings));
+  }
+  if (
+    !errors.length &&
+    !days.some((d) =>
+      Object.entries(d).some(([k, v]) => k !== "date" && v !== null),
+    )
+  )
+    errors.push("El archivo no tiene ningún dato diario.");
+  checkSalesDays(plan, warnings);
   const arAging = readAging(
     findSheet(wb, SHEETS.arAging),
     SHEETS.arAging,
