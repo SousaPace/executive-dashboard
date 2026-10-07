@@ -165,7 +165,8 @@ export function Carousel({
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden">
+      {/* py-1 widens the clip box so card borders at the top/bottom edge are not cut. */}
+      <div className="-my-1 min-h-0 flex-1 overflow-hidden py-1">
         <div
           className="flex h-full transition-transform duration-500 ease-out motion-reduce:transition-none"
           style={{ transform: `translateX(-${active * 100}%)` }}
